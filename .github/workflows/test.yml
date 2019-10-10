@@ -1,0 +1,94 @@
+name: test
+
+on:
+  - push
+
+jobs:
+# karma-android:
+#   name: karma by Android
+#   runs-on: macOS-latest
+#   steps:
+#     - uses: actions/checkout@v2
+#     - uses: actions/setup-node@v2-beta
+#       with:
+#         node-version: 14
+#     - id: yarn-cache
+#       run: echo "::set-output name=dir::$(yarn cache dir)"
+#     - uses: actions/cache@v2
+#       with:
+#         path: ${{ steps.yarn-cache.outputs.dir }}
+#         key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
+#         restore-keys: |
+#           ${{ runner.os }}-yarn-
+#     - run: yarn install --frozen-lockfile
+#     - uses: malinskiy/action-android/install-sdk@release/0.0.7
+#     - run: adb devices
+#     - run: echo $ANDROID_HOME
+#     - uses: malinskiy/action-android/emulator-run-cmd@release/0.0.7
+#       with:
+#         cmd: >
+#           $ANDROID_HOME/platform-tools/adb
+#           shell am start
+#           -W
+#           -a android.intent.action.VIEW
+#           -n com.android.chrome/com.google.android.apps.chrome.Main
+#           -d http://10.0.2.2:9876
+#           --es activeUrl http://10.0.2.2:9876
+#           --esa commandLineArgs --disable-fre,--no-sandbox,--no-first-run,--no-default-browser-check
+#         api: 27
+#         tag: google_apis
+#         abi: x86
+
+  karma-android:
+    name: karma by Android
+    runs-on: macOS-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v2-beta
+        with:
+          node-version: 14
+      - id: yarn-cache
+        run: echo "::set-output name=dir::$(yarn cache dir)"
+      - uses: actions/cache@v2
+        with:
+          path: ${{ steps.yarn-cache.outputs.dir }}
+          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-yarn-
+      - run: yarn install --frozen-lockfile
+      - run: $ANDROID_HOME/platform-tools/adb start-server
+      - run: $ANDROID_HOME/tools/bin/sdkmanager --list
+      - run: $ANDROID_HOME/tools/bin/avdmanager list device
+      - run: printf 'y\n' | $ANDROID_HOME/tools/bin/sdkmanager --install 'system-images;android-27;google_apis_playstore;x86'
+      - run: printf 'n\n' | $ANDROID_HOME/tools/bin/avdmanager create avd -n test -k 'system-images;android-27;google_apis_playstore;x86' --force
+      - run: $ANDROID_HOME/emulator/emulator -version
+      - run: $ANDROID_HOME/emulator/emulator -list-avds
+      - run: nohup $ANDROID_HOME/emulator/emulator -avd test -no-audio -no-snapshot -no-window -timezone Etc/UTC &
+      - run: $ANDROID_HOME/platform-tools/adb wait-for-device shell 'while [[ -z $(getprop sys.boot_completed | tr -d '\r') ]]; do sleep 1; done; input keyevent 82'
+      - run: $ANDROID_HOME/platform-tools/adb devices -l
+      - run: $ANDROID_HOME/platform-tools/adb shell pm list packages
+##### - run: $ANDROID_HOME/platform-tools/adb forward tcp:9876 tcp:9876
+    # - run: curl -L https://download-chromium.appspot.com/dl/Android -o chrome-android.zip
+    # - run: unzip chrome-android.zip
+    # - run: $ANDROID_HOME/platform-tools/adb install chrome-android/apks/ChromePublic.apk
+    # - run: $ANDROID_HOME/platform-tools/adb shell pm list packages
+   ## - run: mkdir -p /data/local/tmp
+   ## - run: printf -- '%s\n' 'chrome --disable-fre --no-sandbox --no-first-run --no-default-browser-check' > /data/local/tmp/chrome-command-line
+      - run: >
+          $ANDROID_HOME/platform-tools/adb
+          shell am start
+          -W
+          -a android.intent.action.VIEW
+          -n com.android.chrome/com.google.android.apps.chrome.Main
+          -d http://10.0.2.2:9876
+          --es activeUrl http://10.0.2.2:9876
+          --esa commandLineArgs --disable-fre,--no-sandbox,--no-first-run,--no-default-browser-check
+      - run: sleep 10
+      - run: yarn karma start --single-run --no-browsers
+      - run: $ANDROID_HOME/platform-tools/adb shell screencap /sdcard/screen.png
+      - run: $ANDROID_HOME/platform-tools/adb pull /sdcard/screen.png
+      - uses: actions/upload-artifact@v1
+        with:
+          name: screen.png
+          path: screen.png
+      - run: $ANDROID_HOME/platform-tools/adb logcat -d
